@@ -11,7 +11,7 @@ from tqdm import tqdm
 # ================================
 # ================================
 
-def gradient_numerical(fct, X0, delta_X=1e-9) -> np.ndarray:
+def gradient_numerical(fct, X0, rel_delta_X=1e-6) -> np.ndarray:
     """
     Performs numerical computation of function gradient at given point
     
@@ -39,7 +39,7 @@ def gradient_numerical(fct, X0, delta_X=1e-9) -> np.ndarray:
     
     while not idx_iterator.finished:
         idx = idx_iterator.multi_index
-        
+        delta_X = rel_delta_X*abs(X0[idx])
         # Step forward
         X_plus = X0.copy()
         X_plus[idx] += delta_X
@@ -105,7 +105,7 @@ def compare_matrices(A, B, rel_tol=1e-6, verbose=True) -> bool:
 
 
 def check_model_gradient(model, X0, out_fct=None, 
-                         delta_X=1e-6, reltol=1-6) -> bool:
+                         rel_delta_X=1e-6, reltol=1-6) -> bool:
     """
     Performs comparison of model-defined analytical gradient calculation and
     numerical computation within given tolerance. Used to check gradient calc
@@ -155,7 +155,7 @@ def check_model_gradient(model, X0, out_fct=None,
     # Compute gradients numerically 
     # Necessary to redefine out_fct to accept model input and return a single value
     grad_X0_num = gradient_numerical(lambda X: out_fct(model.forward(X))[0] + model.reg_loss(), 
-                                     X0, delta_X)
+                                     X0, rel_delta_X)
     
     # Check if gradients are within tolerance
     print('Checking model input...')
@@ -181,7 +181,7 @@ def check_model_gradient(model, X0, out_fct=None,
         # NOTE: Analytical result is calculated above within backeard pass
         # Despite all the consequnt forward passes, no new backward passes
         # performed -> gradients remain unchanged
-        grad_param_num = gradient_numerical(fct, param_value0, delta_X)
+        grad_param_num = gradient_numerical(fct, param_value0, rel_delta_X)
         res &= compare_matrices(xparam.grad, grad_param_num, reltol, True)
         xparam.value = param_value0
     

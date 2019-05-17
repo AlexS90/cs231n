@@ -61,11 +61,19 @@ from _cs231n.gradient_checks import check_model_gradient
 #])
 
 model = models.SequentialModel([
-    layers.DenseLayer(f'FC{ix}', 5, 5, reg_coef=0.0) for ix in range(1, 10)
+    layers.DenseLayer('FC1', 25, 20, reg_coef=1.0), 
+    layers.PReLU('ReLU1'), 
+    layers.DenseLayer('FC2', 20, 15, reg_coef=1.0), 
+    layers.PReLU('ReLU2'), 
+    layers.DenseLayer('FC3', 15, 10, reg_coef=1.0), 
+    layers.PReLU('ReLU3'), 
+    layers.DenseLayer('FC4', 10, 5, reg_coef=1.0), 
+    layers.PReLU('ReLU4'), 
+    layers.DenseLayer('FC5', 5, 5, reg_coef=1.0), 
 ])
 
-X_deb = np.random.uniform(0, 1, size=(5, 5))
+X_deb = np.random.uniform(0, 1, size=(5, 25))
 y_deb = np.random.choice([0, 1], size=5)
     
-check_model_gradient(model, X_deb, delta_X=1e-6, reltol=1e-9, 
-                     out_fct=None)#=lambda X: models.softmax_predict(X, y_deb)[1:3])
+check_model_gradient(model, X_deb, rel_delta_X=1e-3, reltol=1e-6, 
+                     out_fct=lambda X: models.softmax_predict(X, y_deb)[1:3])

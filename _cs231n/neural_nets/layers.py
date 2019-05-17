@@ -98,14 +98,14 @@ class DenseLayer(Layer):
         # ================
         
         if init_std is None:
-            W0 = np.random.normal(0.0, 1/features_in, (features_in, features_out))
+            W0 = np.random.normal(0.0, 1/np.sqrt(features_in), (features_in, features_out))
         else:
             W0 = np.random.normal(0.0, init_std, (features_in, features_out))
             
         self.W = Parameter('W', W0, reg_coef, 'L2')
             
         if include_bias:
-            self.B = Parameter('B', np.zeros((features_out, ), dtype=np.float64))
+            self.B = Parameter('B', np.full((features_out, ), 1/features_out, dtype=np.float64))
             
         self.X_fw = None
             
