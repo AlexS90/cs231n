@@ -74,10 +74,7 @@ class Layer:
         return []
     
     def reg_loss(self):
-        loss = 0.0
-        
-        for xparam in self.params():
-            loss += xparam.reg_loss()[0]
+        return(sum(xparam.reg_loss()[0] for xparam in self.params()))
             
         return loss
     
@@ -98,14 +95,13 @@ class DenseLayer(Layer):
         # ================
         
         if init_std is None:
-            W0 = np.random.normal(0.0, 1/np.sqrt(features_in), (features_in, features_out))
-        else:
-            W0 = np.random.normal(0.0, init_std, (features_in, features_out))
+            init_std = np.sqrt(2.0/features_in)
             
-        self.W = Parameter('W', W0, reg_coef, 'L2')
+        self.W = Parameter('W', init_std*np.random.normal(size=(features_in, features_out)), 
+                           reg_coef, 'L2')
             
         if include_bias:
-            self.B = Parameter('B', np.full((features_out, ), 1/features_out, dtype=np.float64))
+            self.B = Parameter('B', np.zeros((features_out, ), dtype=np.float64))
             
         self.X_fw = None
             
@@ -231,3 +227,80 @@ class PReLU(Layer):
     def reset_grad(self):
         self.neg_slope.grad = np.zeros_like(self.neg_slope.value)
         self.neg_mask = None
+        
+# ================
+# ================
+# ================
+        
+class Dropout(Layer):
+    def __init__(self, name, p_drop=0.5, required_on_inference=False):
+        super().__init__(name, required_on_inference)
+        self.p_drop = p_drop
+        self.dropped_mask = None
+        
+        
+    def forward(self, X, accum_grad=True):
+        if accum_grad:
+            self.dropped_mask = np.random.choice([False, True], X.shape, 
+                                                 p=(1 - self.p_drop, self.p_drop))
+        
+        Y = X.copy()
+        Y[self.dropped_mask] = 0.0
+        
+        return Y/(1 - self.p_drop)
+    
+    
+    def backward(self, grad_Y):
+        grad_X = grad_Y.copy()
+        grad_X[self.dropped_mask] = 0.0
+        
+        return grad_X/(1 - self.p_drop)
+    
+    
+    def reset_grad(self):
+        self.dropped_mask = None
+
+
+class BatchNorm(Layer):
+    def __init__(self, name, required_on_inference=True, eps=1e-6):        
+        super().__init__(name, required_on_inference)
+        self.eps = eps
+        self.scale = Parameter('scale', np.array([1.0]))
+        self.offset = Parameter('offset', np.array([0.1]))
+        
+        self.X_cent_fw = None
+        self.batch_var_fw = None
+        
+        
+    def forward(self, X, accum_grad=True):
+        batch_mean = X.mean()
+        batch_var = X.var()
+        X_cent = (X - batch_mean)/np.sqrt(batch_var + self.eps)
+        
+        if accum_grad:
+            self.X_cent_fw = X_cent
+            self.batch_var_fw = batch_var
+        
+        return self.scale.value*X_cent + self.offset.value
+        
+    def backward(self, grad_Y):
+        self.scale.grad = np.array([np.sum(grad_Y*self.X_cent_fw)])
+        self.offset.grad = np.array([np.sum(grad_Y)])
+        
+        
+        grad_X = grad_Y - grad_Y.sum()/grad_Y.size - \
+            self.X_cent_fw*np.sum(grad_Y*self.X_cent_fw)/grad_Y.size
+            
+        return grad_X/np.sqrt(self.batch_var_fw + self.eps)
+    
+    
+    def params(self):
+        return [self.scale, self.offset]
+    
+    
+    def reset_grad(self):
+        self.scale.grad = 0.0
+        self.offset.grad = 0.0
+        
+        self.X_cent_fw = None
+        self.batch_var_fw = None

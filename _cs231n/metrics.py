@@ -10,7 +10,7 @@ import numpy as np
 # ================================
 # ================================
 
-def clf_score(gt, pred) -> np.ndarray:
+def confusion_matrix(gt, pred) -> np.ndarray:
     """
     Returns confusion matrix of classification on a set of objects, specifically
     a matrix where element [i, j] is how many objects of class j got label i.
@@ -40,6 +40,14 @@ def clf_score(gt, pred) -> np.ndarray:
             cm[pred_class, gt_class] = ((pred == pred_class) & (gt == gt_class)).sum()
             
     return cm
+
+
+def accuracy(gt, pred):
+    """
+    Calculated accuracy score of classification
+    """
+    
+    return np.mean(gt == pred)
 
 
 def clf_scores(cm) -> float:
