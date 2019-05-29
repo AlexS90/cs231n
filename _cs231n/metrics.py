@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Submodule for cs231n course, containing metrics implementation
-"""
+
 
 import numpy as np
 
@@ -31,7 +29,7 @@ def confusion_matrix(gt, pred) -> np.ndarray:
     """
     
     # Number of classes inferred from gt. Assuming classes are enumerated 0 ..
-    n_classes = gt.max()
+    n_classes = gt.max() + 1
     cm = np.zeros((n_classes, n_classes), dtype=np.uint32)
     
     # Fill matrix

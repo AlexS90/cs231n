@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Sat May 25 22:49:19 2019
 
-@author: mooze
-"""
+
+import sys
+if not '..' in sys.path:
+    sys.path = ['..'] + sys.path
 
 import torch
 from torch import nn
@@ -13,6 +13,7 @@ from tqdm import tqdm_notebook
 
 import numpy as np
 import matplotlib.pyplot as plt
+from _cs231n.metrics import accuracy
 
 import time
 
@@ -273,3 +274,104 @@ def visualize_training(loss_tr, loss_val, acc_val):
     axs[1].set_xlabel('Epoch')
     axs[1].set_ylabel('Validation accuracy, %')
     axs[1].grid(True)
+    
+    
+def visualize_prediction_confidence(predX, gt):
+    flag_correct = predX.argmax(axis=1) == gt
+    prob_max = predX.max(axis=1)
+        
+    fig0, axs = plt.subplots(nrows=1, ncols=2, figsize=(16, 5))
+    
+    plt.sca(axs[0])
+    plt.hist([prob_max[flag_correct], prob_max[~flag_correct]], 
+                label=['Correct prediction', 'Incorrect prediction'], 
+                range=(0.0, 1.0), density=True, 
+                bins=np.arange(0.0, 1.0 + 1e-3, 0.025), rwidth=0.9)
+    plt.set_xlabel('Top class probability')
+    plt.set_ylabel('Relative density')
+    plt.set_title('Model confidence')
+    plt.grid(True)
+    plt.legend()
+    
+    # --------------------------------
+    
+    acc_thresh = []
+    nonclf_thresh = []
+    thresholds = np.linspace(0.01, 0.99, 98 + 1)
+    
+    for xthr in thresholds:
+        flag_sure = predX.max(axis=1) >= xthr
+        acc_thresh.append(accuracy(predX[flag_sure].argmax(axis=1), gt[flag_sure]))
+        nonclf_thresh.append(sum(~flag_sure)/predX.shape[0])
+    
+    plt.sca(axs[1])
+    plt.plot(thresholds, acc_thresh, color='red', label='Accuracy')
+    plt.plot(thresholds, nonclf_thresh, color='blue', label='Not classified')
+    plt.set_xlabel('Decision threshold')
+    plt.set_title('Model performance with decision threshold')
+    plt.grid()
+    plt.legend()
+    
+    
+def visualize_confusion_matrix(cm, cats):
+    fig0, axs = plt.subplots(nrows=1, ncols=2, figsize=(16, 7))
+    
+    plt.sca(axs[0])
+    plt.imshow(cm, cmap='rainbow')
+    for ipred in range(cm.shape[0]):
+        for igt in range(cm.shape[1]):
+            plt.text(ipred, igt, cm[ipred, igt], 
+                     ha='center', va='center', color='white', fontsize=14)
+            
+    plt.xlabel('Ground truth', fontsize=14)
+    plt.ylabel('Model prediction', fontsize=14)
+    plt.xticks(range(len(cats)))
+    plt.yticks(range(len(cats)))
+    axs[0].set_xticklabels(cats, rotation='vertical', fontsize=12)
+    axs[0].set_yticklabels(cats, fontsize=12)
+    plt.title('Confusion matrix', fontsize=16)
+    
+    # ================
+    
+    plt.sca(axs[1])
+    plt.imshow(cm, cmap='rainbow')
+    for ipred in range(cm.shape[0]):
+        for igt in range(cm.shape[1]):
+            plt.text(ipred, igt, np.round(100*cm[ipred, igt]/cm[:, igt].sum(), 1), 
+                     ha='center', va='center', color='white', fontsize=14)
+            
+    plt.xlabel('Ground truth', fontsize=14)
+    plt.ylabel('Model prediction', fontsize=14)
+    plt.xticks(range(len(cats)))
+    plt.yticks(range(len(cats)))
+    axs[1].set_xticklabels(cats, rotation='vertical', fontsize=12)
+    axs[1].set_yticklabels(cats, fontsize=12)
+    plt.title('Normalized confusion matrix', fontsize=16)
+    
+    
+def visualize_errors(predX, gt, images, cats, n_per_class=5):
+    fig0, axs = plt.subplots(nrows=len(cats), ncols=n_per_class, 
+                             figsize=(16, 2*len(cats)))
+    for (igt, xcat) in enumerate(cats):
+        idxs = np.random.choice(np.nonzero((gt == igt) & (predX.argmax(axis=1) != gt))[0], 
+                                n_per_class, replace=False)
+        
+        for ((ipred, idx), xax) in zip(enumerate(idxs), axs[igt]):
+            xax.imshow(images[idx])
+            xax.set_xlabel('\n'.join([
+                f'Correct: {xcat}', 
+                'Prob: {0:.3f}'.format(predX[idx, igt])]), fontsize=12)
+            xax.set_title('\n'.join([
+                f'Predicted: {cats[predX[idx].argmax()]}', 
+                'Prob: {0:.3f}'.format(predX[idx].max())]), fontsize=12)
+            #xax.axis('off')
+            
+            xax.spines['top'].set_visible(False)
+            xax.spines['bottom'].set_visible(False)
+            xax.spines['left'].set_visible(False)
+            xax.spines['right'].set_visible(False)
+            
+            xax.set_xticks([])
+            xax.set_yticks([])
+            
+    plt.tight_layout(pad=0.0, h_pad=1.0, w_pad=0.0)

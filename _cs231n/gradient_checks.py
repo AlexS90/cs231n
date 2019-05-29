@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Submodule for cs231n course, containing routines for gradient checks
-"""
+
 
 import numpy as np
 from tqdm import tqdm
