@@ -9,11 +9,13 @@ if not '..' in sys.path:
 import torch
 from torch import nn
 
+from copy import deepcopy
+
 from tqdm import tqdm_notebook
 
 import numpy as np
 import matplotlib.pyplot as plt
-from _cs231n.metrics import accuracy
+from metrics import accuracy
 
 import time
 
@@ -123,7 +125,8 @@ def initial_model_check(model, train_loader, val_loader, device, metric):
 
 def train_torch(model, device, train_loader, val_loader, 
                 loss_fct, opt, lr_sch, metric=None, 
-                num_epochs=10, 
+                num_epochs=10, lr_plateau=False, 
+                early_stopping=False, early_stopping_rounds=3, init_val_loss=np.inf, 
                 verbose=True, show_progress=True, delay=0):
     """
     Wrapper around basic torch training process. Performs optimization
@@ -163,18 +166,32 @@ def train_torch(model, device, train_loader, val_loader,
         Sequence of model loss on validation data
     val_metric : [float]
         Sequence of model metric on validation data
+    best_state : 
+        Model weights with best metric on validation set
     """
     
     tr_loss = []
     val_loss = []
     val_metric = []
     
+    best_val_loss = init_val_loss
+    best_state = None
+    
+    rounds_no_improv = 0
+    keep_running = True
+    
     # Main cycle over epochs
-    for xepoch in range(num_epochs):
+    xepoch = 0
+    while keep_running:
         if verbose:
-            print('-'*32)
+            print('\n' + '-'*32)
             print(f'Epoch {xepoch + 1}/{num_epochs}')
             print('-'*32)
+        
+#            try:
+#                print(f'Learning rate: {lr_sch.get_lr()[0]}')
+#            except:
+#                pass
         
         # Enable training mode, initialize loss accumulator
         model.train()
@@ -216,11 +233,32 @@ def train_torch(model, device, train_loader, val_loader,
             pbar.close()
             
         if verbose:
-            print(f'Training pass over. Loss: {tr_loss[-1]}')
+            print(f'Training pass over.\nTraining loss: {tr_loss[-1]}')
         
         # Pass over validation data, get predictions and calcualate loss
         val_pred, val_gt, val_loss0 = predict_torch(model, val_loader, device)
         val_loss.append(val_loss0)
+        
+        if verbose:
+            print(f'Validation loss: {val_loss[-1]}')
+        
+        # Record best parameters
+        if val_loss0 < best_val_loss:
+            best_val_loss = val_loss0
+            best_state = deepcopy(model.state_dict())
+            rounds_no_improv = max(rounds_no_improv - 1, 0)
+        else:
+            rounds_no_improv += 1
+            
+            if verbose:
+                print(f'No improvement on validation for {rounds_no_improv} epochs')
+            
+            if early_stopping and (rounds_no_improv >= early_stopping_rounds):
+                keep_running = False
+                model.load_state_dict(best_state)
+                
+                if verbose:
+                    print('Invoking early stopping')
         
         # Get metric value
         if metric:
@@ -228,22 +266,20 @@ def train_torch(model, device, train_loader, val_loader,
                 val_gt.numpy(), val_pred.numpy().argmax(axis=1)
             ))
             
-        if verbose:
-            print(f'Validation loss: {val_loss[-1]}')
-            
-            if metric:
+            if verbose:
                 print(f'Validation metric: {val_metric[-1]}')
                 
-            print('\n')
-        
         # Adjust learning rate
-        try:
-            lr_sch.step(metrics=val_loss0)
-        except TypeError:
+        if lr_plateau:
+            lr_sch.step(val_loss0)
+        else:
             lr_sch.step()
         
+        xepoch += 1
+        keep_running &= (xepoch < num_epochs)
+        
         # Throttling if enabled
-        if delay > 0:
+        if (delay > 0) and keep_running:
             if verbose:
                 print(f'Delay for {delay} seconds')
                 
@@ -287,9 +323,9 @@ def visualize_prediction_confidence(predX, gt):
                 label=['Correct prediction', 'Incorrect prediction'], 
                 range=(0.0, 1.0), density=True, 
                 bins=np.arange(0.0, 1.0 + 1e-3, 0.025), rwidth=0.9)
-    plt.set_xlabel('Top class probability')
-    plt.set_ylabel('Relative density')
-    plt.set_title('Model confidence')
+    plt.xlabel('Top class probability')
+    plt.ylabel('Relative density')
+    plt.title('Model confidence')
     plt.grid(True)
     plt.legend()
     
@@ -307,21 +343,21 @@ def visualize_prediction_confidence(predX, gt):
     plt.sca(axs[1])
     plt.plot(thresholds, acc_thresh, color='red', label='Accuracy')
     plt.plot(thresholds, nonclf_thresh, color='blue', label='Not classified')
-    plt.set_xlabel('Decision threshold')
-    plt.set_title('Model performance with decision threshold')
+    plt.xlabel('Decision threshold')
+    plt.title('Model performance with decision threshold')
     plt.grid()
     plt.legend()
     
     
-def visualize_confusion_matrix(cm, cats):
+def visualize_confusion_matrix(cm, cats, cmap='rainbow', text_col='white'):
     fig0, axs = plt.subplots(nrows=1, ncols=2, figsize=(16, 7))
     
     plt.sca(axs[0])
-    plt.imshow(cm, cmap='rainbow')
+    plt.imshow(cm, cmap=cmap)
     for ipred in range(cm.shape[0]):
         for igt in range(cm.shape[1]):
             plt.text(ipred, igt, cm[ipred, igt], 
-                     ha='center', va='center', color='white', fontsize=14)
+                     ha='center', va='center', color=text_col, fontsize=14)
             
     plt.xlabel('Ground truth', fontsize=14)
     plt.ylabel('Model prediction', fontsize=14)
@@ -334,11 +370,11 @@ def visualize_confusion_matrix(cm, cats):
     # ================
     
     plt.sca(axs[1])
-    plt.imshow(cm, cmap='rainbow')
+    plt.imshow(cm, cmap=cmap)
     for ipred in range(cm.shape[0]):
         for igt in range(cm.shape[1]):
             plt.text(ipred, igt, np.round(100*cm[ipred, igt]/cm[:, igt].sum(), 1), 
-                     ha='center', va='center', color='white', fontsize=14)
+                     ha='center', va='center', color=text_col, fontsize=14)
             
     plt.xlabel('Ground truth', fontsize=14)
     plt.ylabel('Model prediction', fontsize=14)
@@ -353,8 +389,13 @@ def visualize_errors(predX, gt, images, cats, n_per_class=5):
     fig0, axs = plt.subplots(nrows=len(cats), ncols=n_per_class, 
                              figsize=(16, 2*len(cats)))
     for (igt, xcat) in enumerate(cats):
-        idxs = np.random.choice(np.nonzero((gt == igt) & (predX.argmax(axis=1) != gt))[0], 
-                                n_per_class, replace=False)
+        #Pick random images where model mistakes
+        error_idxs = np.nonzero((gt == igt) & (predX.argmax(axis=1) != gt))[0]
+        
+        if len(error_idxs) < n_per_class:
+            idxs = np.random.permutation(error_idxs)
+        else:
+            idxs = np.random.choice(error_idxs, n_per_class, replace=False)
         
         for ((ipred, idx), xax) in zip(enumerate(idxs), axs[igt]):
             xax.imshow(images[idx])

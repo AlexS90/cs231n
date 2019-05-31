@@ -1,10 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Thu May 16 19:27:15 2019
 
-@author: mooze
-"""
 
 import sys
 if not '..' in sys.path:
