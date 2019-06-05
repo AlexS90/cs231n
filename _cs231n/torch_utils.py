@@ -15,7 +15,7 @@ from tqdm import tqdm_notebook
 
 import numpy as np
 import matplotlib.pyplot as plt
-from metrics import accuracy
+from _cs231n.metrics import accuracy
 
 import time
 
@@ -398,7 +398,7 @@ def visualize_errors(predX, gt, images, cats, n_per_class=5):
             idxs = np.random.choice(error_idxs, n_per_class, replace=False)
         
         for ((ipred, idx), xax) in zip(enumerate(idxs), axs[igt]):
-            xax.imshow(images[idx])
+            xax.imshow(images[idx].transpose((1, 2, 0o)))
             xax.set_xlabel('\n'.join([
                 f'Correct: {xcat}', 
                 'Prob: {0:.3f}'.format(predX[idx, igt])]), fontsize=12)
